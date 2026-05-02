@@ -44,13 +44,14 @@ def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, hei
         "vph": str(height),
     }
 
-    timeout = httpx.Timeout(12.0, connect=5.0)
+
+    timeout = httpx.Timeout(12.0, connect=5.0) # slows responses when using proxies and to reduce bot detection risk
     with httpx.Client(headers=headers, proxy=proxy, timeout=timeout, http2=True) as client:
         
         search_url = None
         redirect_url = f"{LENS_UPLOAD_URL}?{urlencode(upload_params)}"
 
-        # Follow redirects until Google gives search URL
+        # Follow redirects until Google gives search URL with session params
         for _ in range(5):
             response = client.get(redirect_url, follow_redirects=False)
             location = response.headers.get("location")
