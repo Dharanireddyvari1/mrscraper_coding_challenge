@@ -7,6 +7,8 @@ import httpx
 
 LENS_UPLOAD_URL = "https://lens.google.com/v3/upload"
 
+RETRIES_PER_PROXY = 1
+MAX_PROXY_ATTEMPTS = 4
 
 # Browser profiles with actual user agents, client hints, and viewport sizes
 BROWSER_PROFILES = [
@@ -42,8 +44,8 @@ def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, hei
         "vph": str(height),
     }
 
-    timeout = httpx.Timeout(30.0, connect=15.0)
-    with httpx.Client(headers=headers, proxy=proxy, timeout = timeout, http2=True) as client:
+    timeout = httpx.Timeout(12.0, connect=5.0)
+    with httpx.Client(headers=headers, proxy=proxy, timeout=timeout, http2=True) as client:
         
         search_url = None
         redirect_url = f"{LENS_UPLOAD_URL}?{urlencode(upload_params)}"
@@ -79,8 +81,7 @@ def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, hei
         query["udm"] = ["48"]  # udm=48 switches to the Exact Match tab
         exact_url = urlunparse(parsed_search._replace(query=urlencode(query, doseq=True)))
 
-        time.sleep(random.uniform(0.6, 1.8)) # Delay before hitting Search to reduce bot detection risk
-
+        time.sleep(random.uniform(0.3, 0.8)) # Delay before hitting Search to reduce bot detection risk
         exact_response = client.get(exact_url, follow_redirects=True)
         exact_response.raise_for_status()
 
@@ -123,20 +124,20 @@ def exact_match_html(image_url: str, proxies: list[str] | None = None) -> str:
     if proxies:
         proxy_attempts = list(proxies)
         random.shuffle(proxy_attempts)
+        proxy_attempts = proxy_attempts[:MAX_PROXY_ATTEMPTS]
     else:
         proxy_attempts = [None]
 
     failures = []
-    retries_per_proxy = 2
 
     for proxy in proxy_attempts:
-        for attempt in range(retries_per_proxy):
+        for attempt in range(RETRIES_PER_PROXY):
             try:
                 if attempt > 0 or failures:
-                    time.sleep(random.uniform(1.0, 3.0))
+                    time.sleep(random.uniform(0.3, 0.8))
                 return fetch_exact_match_html(image_url, proxy, headers, width, height)
             except (RuntimeError, httpx.HTTPError) as e:
-                if attempt == retries_per_proxy - 1:
+                if attempt == RETRIES_PER_PROXY - 1:
                     failures.append(f"{proxy or 'direct connection'} -> {e}")
                 continue
 
